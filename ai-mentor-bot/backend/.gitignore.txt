@@ -1,0 +1,15 @@
+# Ignore everything in the parent directories
+../*
+
+# Allow only the current folder (backend)
+!./
+
+# Ignore unnecessary files and folders
+*.log
+*.dat
+*.tmp
+__pycache__/
+*.pyc
+.vscode/
+.DS_Store
+.env
