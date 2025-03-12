@@ -13,11 +13,12 @@ try:
         database=os.getenv("DB_NAME")
     )
     
-    if connection and connection.is_connected():
+    if connection.is_connected():
         print("✅ Successfully connected to MySQL database!")
 except Error as e:
     print(f"❌ Error while connecting to MySQL: {e}")
+    connection = None  # Make sure connection is defined
 finally:
-    if 'connection' in locals() and connection.is_connected():
+    if connection and connection.is_connected():
         connection.close()
         print("✅ MySQL connection closed.")
