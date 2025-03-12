@@ -8,6 +8,33 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
 )
 import openai
+from telegram import ForceReply  # Add this import
+
+async def ask(update: Update, context: CallbackContext) -> None:
+    user_message = " ".join(context.args)
+    
+    if not user_message:
+        await update.message.reply_text("❌ Please provide a question after the command. Example: /ask What is Python?")
+        return
+
+    try:
+        # Send user message to OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful AI mentor bot."},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=300,
+            temperature=0.7,
+        )
+        
+        answer = response['choices'][0]['message']['content']
+        await update.message.reply_text(answer)
+    
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
+
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -168,6 +195,7 @@ def main():
     app.add_handler(CommandHandler("explain", explain))
     app.add_handler(CommandHandler("quiz", quiz))
     app.add_handler(CommandHandler("ask", ask_question))
+    app.add_handler(CommandHandler("ask", ask))
 
     # Message handler for quiz answers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
