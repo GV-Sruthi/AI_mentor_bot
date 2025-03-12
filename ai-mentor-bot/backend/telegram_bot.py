@@ -167,6 +167,7 @@ def main():
     app.add_handler(CommandHandler("studyplan", studyplan))
     app.add_handler(CommandHandler("explain", explain))
     app.add_handler(CommandHandler("quiz", quiz))
+    app.add_handler(CommandHandler("ask", ask_question))
 
     # Message handler for quiz answers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
