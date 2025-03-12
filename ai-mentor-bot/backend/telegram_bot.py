@@ -7,11 +7,36 @@ from telegram import Update
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
 )
-
+import openai
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
+async def ask_question(update: Update, context: CallbackContext) -> None:
+    if not context.args:
+        await update.message.reply_text("❌ Please ask a question. Example: /ask What is AI?")
+        return
+
+    question = " ".join(context.args)
+
+    try:
+        # Call OpenAI API to get the answer
+        response = openai.ChatCompletion.create(
+            model="gpt-4",  # If this doesn't work, try "gpt-3.5-turbo"
+            messages=[
+                {"role": "system", "content": "You are a helpful and knowledgeable AI assistant."},
+                {"role": "user", "content": question}
+            ],
+            max_tokens=150,
+            temperature=0.7
+        )
+        
+        answer = response['choices'][0]['message']['content']
+        await update.message.reply_text(f"🤖 {answer}")
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ An error occurred: {e}")
 # Check if token is loaded
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_BOT_TOKEN not found. Make sure you have a .env file with the correct token.")
