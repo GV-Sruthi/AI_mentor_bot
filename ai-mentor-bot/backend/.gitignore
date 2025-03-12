@@ -20,5 +20,5 @@ venv/
 #Ignore environment variables
 .env
 
-# Allow test_connection.py
-!test_connection.py
+# Allow test_connection.py in the backend folder
+!/backend/test_connection.py
