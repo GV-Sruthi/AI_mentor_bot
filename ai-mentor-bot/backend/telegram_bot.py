@@ -99,9 +99,36 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 async def studyplan(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
+    username = update.message.from_user.username
+    name = update.message.from_user.first_name
+
+    # Save user to 'users' table if not exists
+    connection = get_db_connection()
+    if connection:
+        cursor = connection.cursor()
+        try:
+            cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+            user_exists = cursor.fetchone()
+
+            if not user_exists:
+                cursor.execute(
+                    "INSERT INTO users (user_id, username, name) VALUES (%s, %s, %s)",
+                    (user_id, username, name)
+                )
+                connection.commit()
+                logging.info("✅ New user added to the 'users' table.")
+
+        except mysql.connector.Error as e:
+            logging.error(f"❌ Error saving user: {e}")
+        finally:
+            cursor.close()
+            connection.close()
+
+    # Now save the study plan
     study_plan_text = "📚 Here's your personalized study plan: [Generated AI Study Plan]"  # Placeholder logic
     save_study_plan(user_id, study_plan_text)
     await update.message.reply_text(f"✅ Study plan saved!\n\n{study_plan_text}")
+
 
 async def explain(update: Update, context: CallbackContext) -> None:
     if context.args:
