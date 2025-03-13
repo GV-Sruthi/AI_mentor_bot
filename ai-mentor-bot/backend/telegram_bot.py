@@ -3,42 +3,16 @@ import os
 import logging
 import random
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, ForceReply
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
 )
-import openai
-from telegram import ForceReply  # Add this import
+import requests
 
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
-async def ask_question(update: Update, context: CallbackContext) -> None:
-    if not context.args:
-        await update.message.reply_text("❌ Please ask a question. Example: /ask What is AI?")
-        return
-
-    question = " ".join(context.args)
-
-    try:
-        # Call OpenAI API to get the answer
-        response = openai.ChatCompletion.create(
-            model="gpt-4",  # If this doesn't work, try "gpt-3.5-turbo"
-            messages=[
-                {"role": "system", "content": "You are a helpful and knowledgeable AI assistant."},
-                {"role": "user", "content": question}
-            ],
-            max_tokens=150,
-            temperature=0.7
-        )
-        
-        answer = response['choices'][0]['message']['content']
-        await update.message.reply_text(f"🤖 {answer}")
-
-    except Exception as e:
-        await update.message.reply_text(f"❌ An error occurred: {e}")
 # Check if token is loaded
 if not TOKEN:
     raise ValueError("❌ TELEGRAM_BOT_TOKEN not found. Make sure you have a .env file with the correct token.")
@@ -46,140 +20,74 @@ if not TOKEN:
 # Logging setup
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# Database connection function
-def get_db_connection():
-    try:
-        conn = mysql.connector.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            user=os.getenv("DB_USER", "root"),
-            password=os.getenv("DB_PASSWORD", ""),
-            database=os.getenv("DB_NAME", "your_database_name")
-        )
-        return conn
-    except mysql.connector.Error as e:
-        logging.error(f"Database connection error: {e}")
-        return None
+# API URL for FastAPI backend
+backend_url = "http://localhost:8000/process_message"
 
-# Save Study Plan to DB
-def save_study_plan(user_id, study_plan):
-    connection = get_db_connection()
-    if connection:
-        cursor = connection.cursor()
-        try:
-            query = "INSERT INTO study_plans (user_id, study_plan) VALUES (%s, %s)"
-            cursor.execute(query, (user_id, study_plan))
-            connection.commit()
-            logging.info("✅ Study plan saved successfully!")
-        except mysql.connector.Error as e:
-            logging.error(f"❌ Error saving study plan: {e}")
-        finally:
-            cursor.close()
-            connection.close()
-
-# Retrieve Study Plan from DB
-def retrieve_study_plan(user_id):
-    connection = get_db_connection()
-    if connection:
-        cursor = connection.cursor()
-        try:
-            query = "SELECT study_plan FROM study_plans WHERE user_id = %s ORDER BY id DESC LIMIT 1"
-            cursor.execute(query, (user_id,))
-            result = cursor.fetchone()
-            return result[0] if result else None
-        except mysql.connector.Error as e:
-            logging.error(f"❌ Error retrieving study plan: {e}")
-        finally:
-            cursor.close()
-            connection.close()
-    return None
+# Send message to FastAPI backend for processing
+async def send_message_to_backend(message, chat_id):
+    response = requests.post(backend_url, json={"message": message})
+    
+    if response.status_code == 200:
+        reply = response.json().get("reply")
+    else:
+        reply = f"Error: {response.status_code}"
+    
+    return reply
 
 # Command Handlers
 async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text("Hello! I'm your AI Mentor Bot. Use /studyplan to get a study plan or /quiz for a quiz!")
+    await update.message.reply_text(
+        "👋 Hello! I'm your AI Mentor Bot. Here are some commands you can use:\n"
+        "💡 /studyplan - Generate a personalized study plan.\n"
+        "📝 /explain <topic> - Get explanations on various topics.\n"
+        "🧠 /quiz - Test your knowledge with a quiz.\n"
+        "🤖 Just ask me anything else, and I'll try to help you!"
+    )
 
 async def studyplan(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    try:
-        # Generate a study plan using OpenAI API
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an AI mentor helping students create personalized study plans."},
-                {"role": "user", "content": "Create a study plan for a beginner learning Python programming."}
-            ],
-            max_tokens=300,
-            temperature=0.7
-        )
-        
-        study_plan_text = response['choices'][0]['message']['content']
-        
-        # Save the study plan to the database
-        save_study_plan(user_id, study_plan_text)
-        
-        # Send the generated study plan to the user
-        await update.message.reply_text(f"✅ Study plan saved!\n\n📚 {study_plan_text}")
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error generating study plan: {e}")
-
+    user_message = "Create a study plan for a beginner learning Python programming."
+    
+    reply = await send_message_to_backend(user_message, user_id)
+    await update.message.reply_text(reply)
 
 async def explain(update: Update, context: CallbackContext) -> None:
     if context.args:
         topic = " ".join(context.args).lower()
-        explanation = f"🔍 Explanation for *{topic.capitalize()}*:\n"
-
-        explanations = {
-            "python": "Python is a high-level programming language known for its readability.",
-            "oop": "Object-Oriented Programming (OOP) is a paradigm based on objects and classes."
-        }
-        explanation += explanations.get(topic, "I don't have an explanation for that yet. Try another topic!")
+        message = f"Explain {topic}"
+        user_id = update.message.from_user.id
+        
+        reply = await send_message_to_backend(message, user_id)
+        await update.message.reply_text(reply)
     else:
-        explanation = "❌ Please provide a topic. Example: /explain Python"
+        await update.message.reply_text("❌ Please provide a topic. Example: /explain Python")
 
-    await update.message.reply_text(explanation, parse_mode="Markdown")
+async def ask(update: Update, context: CallbackContext) -> None:
+    if not context.args:
+        await update.message.reply_text("❌ Please ask a question. Example: /ask What is AI?")
+        return
 
-# Sample quiz questions
-quiz_questions = [
-    {"question": "What is the output of `print(2 ** 3)`?", "options": ["6", "8", "9"], "answer": "8"},
-    {"question": "Which keyword is used to define a function in Python?", "options": ["func", "define", "def"], "answer": "def"},
-    {"question": "What does `len([1, 2, 3])` return?", "options": ["3", "2", "None"], "answer": "3"}
-]
+    question = " ".join(context.args)
+    user_id = update.message.from_user.id
 
-user_quiz_answers = {}
+    reply = await send_message_to_backend(question, user_id)
+    await update.message.reply_text(reply)
 
 async def quiz(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.chat_id
-    question = random.choice(quiz_questions)
+    question = random.choice([
+        "What is the output of `print(2 ** 3)`?",
+        "Which keyword is used to define a function in Python?",
+        "What does `len([1, 2, 3])` return?"
+    ])
+    await update.message.reply_text(f"🧠 Quiz Time! {question}")
 
-    user_quiz_answers[user_id] = question["answer"]
+async def handle_message(update: Update, context: CallbackContext) -> None:
+    user_message = update.message.text
+    user_id = update.message.from_user.id
 
-    options_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(question["options"])])
-    quiz_text = f"🧠 *Quiz Time!*\n\n{question['question']}\n\n{options_text}\n\nReply with the correct option number!"
+    reply = await send_message_to_backend(user_message, user_id)
+    await update.message.reply_text(reply)
 
-    await update.message.reply_text(quiz_text, parse_mode="Markdown")
-
-async def check_answer(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.chat_id
-
-    if user_id in user_quiz_answers:
-        correct_answer = user_quiz_answers[user_id]
-        user_answer = update.message.text.strip()
-
-        try:
-            user_choice = int(user_answer)
-                selected_option = question["options"][user_choice - 1]
-            if selected_option == correct_answer:
-                await update.message.reply_text("✅ Correct! Well done.")
-            else:
-                await update.message.reply_text(f"❌ Incorrect. The correct answer was: {correct_answer}")
-
-            del user_quiz_answers[user_id]  # Remove quiz data after answering
-        except (ValueError, IndexError):
-            await update.message.reply_text("❌ Invalid response. Please reply with a valid option number (1, 2, or 3).")
-    else:
-        await update.message.reply_text("ℹ️ Use /quiz to start a new quiz first!")
-
-# Main function to run the bot
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -188,10 +96,10 @@ def main():
     app.add_handler(CommandHandler("studyplan", studyplan))
     app.add_handler(CommandHandler("explain", explain))
     app.add_handler(CommandHandler("quiz", quiz))
-    app.add_handler(CommandHandler("ask", ask_question))
-
-    # Message handler for quiz answers
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
+    app.add_handler(CommandHandler("ask", ask))
+    
+    # Message handler for general queries (calls FastAPI backend)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logging.info("🤖 Bot is running...")
     app.run_polling()
