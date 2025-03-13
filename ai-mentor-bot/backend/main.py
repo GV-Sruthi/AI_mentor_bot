@@ -40,10 +40,9 @@ def select_model(user_message: str) -> str:
 
 # Process message from the user
 @app.post("/process_message")
-async def process_message(request: Request):
+async def process_message(message: Message):
     try:
-        data = await request.json()
-        user_message = data.get("message", "")
+        user_message = message.message
         
         selected_model = select_model(user_message)
         if selected_model == "GPT-4":
