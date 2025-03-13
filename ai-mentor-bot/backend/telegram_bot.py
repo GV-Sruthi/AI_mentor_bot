@@ -10,31 +10,6 @@ from telegram.ext import (
 import openai
 from telegram import ForceReply  # Add this import
 
-async def ask(update: Update, context: CallbackContext) -> None:
-    user_message = " ".join(context.args)
-    
-    if not user_message:
-        await update.message.reply_text("❌ Please provide a question after the command. Example: /ask What is Python?")
-        return
-
-    try:
-        # Send user message to OpenAI API
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful AI mentor bot."},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=300,
-            temperature=0.7,
-        )
-        
-        answer = response['choices'][0]['message']['content']
-        await update.message.reply_text(answer)
-    
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-
 # Load environment variables
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -124,9 +99,29 @@ async def start(update: Update, context: CallbackContext) -> None:
 
 async def studyplan(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
-    study_plan_text = "📚 Here's your personalized study plan: [Generated AI Study Plan]"  # Placeholder logic
-    save_study_plan(user_id, study_plan_text)
-    await update.message.reply_text(f"✅ Study plan saved!\n\n{study_plan_text}")
+    try:
+        # Generate a study plan using OpenAI API
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an AI mentor helping students create personalized study plans."},
+                {"role": "user", "content": "Create a study plan for a beginner learning Python programming."}
+            ],
+            max_tokens=300,
+            temperature=0.7
+        )
+        
+        study_plan_text = response['choices'][0]['message']['content']
+        
+        # Save the study plan to the database
+        save_study_plan(user_id, study_plan_text)
+        
+        # Send the generated study plan to the user
+        await update.message.reply_text(f"✅ Study plan saved!\n\n📚 {study_plan_text}")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error generating study plan: {e}")
+
 
 async def explain(update: Update, context: CallbackContext) -> None:
     if context.args:
@@ -172,8 +167,7 @@ async def check_answer(update: Update, context: CallbackContext) -> None:
 
         try:
             user_choice = int(user_answer)
-            selected_option = quiz_questions[0]["options"][user_choice - 1]  # Get user's selected option
-
+                selected_option = question["options"][user_choice - 1]
             if selected_option == correct_answer:
                 await update.message.reply_text("✅ Correct! Well done.")
             else:
@@ -195,7 +189,6 @@ def main():
     app.add_handler(CommandHandler("explain", explain))
     app.add_handler(CommandHandler("quiz", quiz))
     app.add_handler(CommandHandler("ask", ask_question))
-    app.add_handler(CommandHandler("ask", ask))
 
     # Message handler for quiz answers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
