@@ -4,6 +4,7 @@ import openai  # For GPT-4
 import json
 import mysql.connector
 import os
+import re
 from dotenv import load_dotenv
 import requests  # For making HTTP requests to Code Llama API
 
@@ -40,42 +41,41 @@ def select_model(user_message: str) -> str:
 # Process message from the user
 @app.post("/process_message")
 async def process_message(request: Request):
-    data = await request.json()
-    user_message = data.get("message", "")
+    try:
+        data = await request.json()
+        user_message = data.get("message", "")
+        
+        selected_model = select_model(user_message)
+        if selected_model == "GPT-4":
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a helpful and knowledgeable AI assistant."},
+                    {"role": "user", "content": user_message}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+            reply = response.choices[0].message['content']
+            model_name = "GPT-4"
+        elif selected_model == "CodeLlama":
+            response = requests.post(
+                codellama_api_url,
+                json={"message": user_message},
+                headers={"Content-Type": "application/json"}
+            )
+            if response.status_code == 200:
+                reply = response.json().get("reply", "Sorry, I couldn't understand your query.")
+            else:
+                reply = f"Error: Code Llama API responded with status code {response.status_code}"
+            model_name = "Code Llama"
 
-    # Choose model based on query type
-    selected_model = select_model(user_message)
-
-    if selected_model == "GPT-4":
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful and knowledgeable AI assistant."},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=500,
-            temperature=0.7
-        )
-        reply = response.choices[0].message['content']
-        model_name = "GPT-4"
-
-    elif selected_model == "CodeLlama":
-        response = openai.ChatCompletion.create(
-            model="code-llama",
-            messages=[
-                {"role": "system", "content": "You are an expert coding assistant specialized in providing code solutions, explanations, and debugging."},
-                {"role": "user", "content": user_message}
-            ],
-            max_tokens=500,
-            temperature=0.7
-        )
-        reply = response.choices[0].message['content']
-        model_name = "Code Llama"
-
-    return {"reply": f"🤖 [{model_name}] - {reply}"}
-    
+        
+        return {"reply": f"🤖 [{model_name}] - {reply}"}
+        
     except Exception as e:
         return {"reply": f"Error: {str(e)}"}
+
 
 @app.post("/create_study_plan/")
 def create_study_plan(study_plan: StudyPlan):
