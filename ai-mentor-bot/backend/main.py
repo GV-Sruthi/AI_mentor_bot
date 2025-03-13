@@ -49,15 +49,17 @@ async def process_message(message: Message):
             reply = f"📝 Here's some help with your code:\n\n{codellama_response}"
         
         else:
-            # Use GPT-4 for general conversation
-            gpt4_response = openai.ChatCompletion.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
-                messages=[{"role": "user", "content": user_message}],
+                messages=[
+                    {"role": "system", "content": "You are a helpful and knowledgeable AI assistant."},
+                    {"role": "user", "content": user_message}
+                ],
                 max_tokens=500,
                 temperature=0.7
             )
-            
-            reply = gpt4_response['choices'][0]['message']['content']
+            reply = response.choices[0].message['content']
+
         
         return {"reply": reply}
     
