@@ -4,9 +4,7 @@ import logging
 import random
 from dotenv import load_dotenv
 from telegram import Update, ForceReply
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, filters, CallbackContext
-)
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 import requests
 
 # Load environment variables
@@ -89,20 +87,23 @@ async def handle_message(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(reply)
 
 def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
     # Register command handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("studyplan", studyplan))
-    app.add_handler(CommandHandler("explain", explain))
-    app.add_handler(CommandHandler("quiz", quiz))
-    app.add_handler(CommandHandler("ask", ask))
-    
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("studyplan", studyplan))
+    dp.add_handler(CommandHandler("explain", explain))
+    dp.add_handler(CommandHandler("quiz", quiz))
+    dp.add_handler(CommandHandler("ask", ask))
+
     # Message handler for general queries (calls FastAPI backend)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     logging.info("🤖 Bot is running...")
-    app.run_polling()
+    updater.start_polling()
+    updater.idle()
+
 
 if __name__ == "__main__":
     main()
