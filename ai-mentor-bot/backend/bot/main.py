@@ -175,9 +175,6 @@ async def explain(update: Update, context: CallbackContext):
     for part in split_message(explanation):
         await update.message.reply_text(part)
 
-# Dictionary to track active quizzes
-quiz_questions = {}
-
 # Function to escape special characters for MarkdownV2
 def escape_markdown_v2(text: str) -> str:
     """
@@ -186,124 +183,65 @@ def escape_markdown_v2(text: str) -> str:
     escape_chars = r"_*[]()~`>#+-=|{}.!\\"
     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
 
-async def quiz(update: Update, context: CallbackContext):
-    user_id = update.message.chat_id
+# async def quiz(update: Update, context: CallbackContext):
+#     """Generate a quiz question based on the user's topic input and send it."""
+#     if context.args:
+#         topic = " ".join(context.args)
+#     else:
+#         await update.message.reply_text("❌ Please provide a topic. Example: /quiz space")
+#         return
 
-    if context.args:
-        topic = " ".join(context.args)  # Get topic from user input
-    else:
-        await update.message.reply_text("❌ Please provide a topic. Example: /quiz tomatoes")
-        return
+#     print(f"✅ Generating quiz for topic: {topic}")
 
-    print(f"✅ /quiz command received! Topic: {topic}")  # Debugging
+#     # AI Request
+#     prompt = f"Generate a short quiz question about {topic}."
+#     ai_response = query_together_ai(prompt)  
+#     promptans = f"What's the correct answer to {prompt}?"
 
-    # Prevent multiple active quizzes
-    if user_id in quiz_questions:
-        await update.message.reply_text("⚠️ You already have an active quiz! Answer it before starting a new one.")
-        return
+#     if not ai_response:
+#         await update.message.reply_text("⚠️ AI could not generate a valid quiz. Try again!")
+#         return
 
-    # Retrieve past messages for context
-    past_messages = get_recent_conversations(user_id, limit=5)
+#     try:
+        
+#         print(f"✅ Quiz Question: {prompt}")
+#         print(f"✅ Correct Answer: {[promptans]}")
 
-    # AI prompt with context
-    prompt = f"""
-    Previous conversation:\n{past_messages}
-    Generate a multiple-choice quiz question about {topic}.
-    Format:
-    Question: <Your question>
-    1. Option 1
-    2. Option 2
-    3. Option 3
-    4. Option 4
-    Answer: <Correct option number>
-    """
+#         # ✅ FIX: Add `parse_mode="Markdown"` to format messages properly
+#         await update.message.reply_text(
+#             f"🧠 *Quiz Time!*\n\n{prompt}\n\nReply with your answer!",
+#             parse_mode="Markdown"
+#         )
 
-    ai_response = query_together_ai(prompt)  # Fetch AI response
+#         # Store answer temporarily in context.chat_data
+#         context.chat_data["quiz_answer"] = {promptans}
 
-    # Debugging logs to check AI response
-    print(f"✅ AI Response: {ai_response}")
+#     except Exception as e:
+#         print(f"❌ Error: {e}")
+#         await update.message.reply_text(f"❌ Error processing quiz: {str(e)}")
 
-    # Ensure AI response is in expected format
-    if not ai_response or "Question:" not in ai_response or "Answer:" not in ai_response:
-        await update.message.reply_text("⚠️ AI could not generate a quiz question. Please try again!")
-        return
 
-    try:
-        lines = ai_response.strip().split("\n")
+# async def check_answer(update: Update, context: CallbackContext):
+#     """Check user's answer and provide feedback."""
+#     user_response = update.message.text.strip().lower()
+#     correct_answer = context.chat_data.get("quiz_answer")
 
-        if len(lines) < 6:
-            raise ValueError("AI response format is incorrect.")
+#     promptcheck = f"Is {correct_answer} and {user_response} same? Answer in yes or no"
 
-        question_text = escape_markdown_v2(lines[0].replace("Question: ", "").strip())
+#     if {promptcheck}.strip().lower() == "no":
+#         await update.message.reply_text("⚠️ No active quiz. Start a new quiz with /quiz [topic].")
+#         return
 
-        options = []
-        for i in range(1, 5):
-            if ". " in lines[i]:
-                options.append(escape_markdown_v2(lines[i].split(". ", 1)[1]))
-            else:
-                raise ValueError(f"Option format is incorrect: {lines[i]}")
+#     # Check the answer
+#     if user_response == correct_answer:
+#         response = "🎉 *Correct!* 🎉"
+#     else:
+#         response = f"❌ *Wrong!* The correct answer was: `{correct_answer}`"
 
-        # Extract correct answer safely
-        answer_line = lines[5].replace("Answer: ", "").strip()
-        if not answer_line.isdigit():
-            raise ValueError(f"Correct answer index is not a valid number: '{answer_line}'")
+#     await update.message.reply_text(response, parse_mode="Markdown")
 
-        correct_answer_index = int(answer_line) - 1
-        if not (0 <= correct_answer_index < 4):
-            raise ValueError(f"Correct answer index is out of range: {correct_answer_index + 1}")
-
-        # Store original correct answer before shuffling
-        original_correct_answer = options[correct_answer_index]
-
-        # Shuffle options and find new correct index
-        random.shuffle(options)
-        correct_answer = options.index(original_correct_answer) + 1
-
-        # Store the question in the dictionary
-        quiz_questions[user_id] = {
-            "question": question_text,
-            "options": options,
-            "answer": correct_answer
-        }
-
-        options_text = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(options)])
-        quiz_text = f"🧠 *Quiz Time!* \n\n{question_text}\n\n{options_text}\n\n" \
-                    "Reply with the correct option number!"
-
-        # Save question to conversations table
-        save_conversation(user_id, f"/quiz {topic}", f"Q: {question_text}\n{options_text}")
-
-        await update.message.reply_text(escape_markdown_v2(quiz_text), parse_mode="MarkdownV2")
-
-    except Exception as e:
-        error_message = escape_markdown_v2(str(e))
-        await update.message.reply_text(f"❌ *Error generating quiz:* {error_message}\nTry again!", parse_mode="MarkdownV2")
-
-async def check_answer(update: Update, context: CallbackContext) -> None:
-    user_id = update.message.chat_id
-    if user_id not in quiz_questions:
-        await update.message.reply_text("⚠️ *No active quiz.*\nStart a new quiz with `/quiz [topic]`.", parse_mode="MarkdownV2")
-        return
-
-    user_answer = update.message.text.strip()
-
-    if not user_answer.isdigit():
-        await update.message.reply_text("⚠️ *Please reply with a number (1-4).*", parse_mode="MarkdownV2")
-        return
-
-    user_answer = int(user_answer)
-    correct_answer = quiz_questions[user_id]["answer"]
-
-    if user_answer == correct_answer:
-        response_text = "🎉 *Correct!* Well done!"
-    else:
-        response_text = f"❌ *Wrong!* The correct answer was `{correct_answer}`."
-
-    # Save user answer to conversations table
-    save_conversation(user_id, f"User answered: {user_answer}", response_text)
-
-    await update.message.reply_text(response_text, parse_mode="MarkdownV2")
-    del quiz_questions[user_id]  # Remove question after answering
+#     # Clear stored answer
+#     context.chat_data.pop("quiz_answer", None)
 
 async def handle_message(update: Update, context: CallbackContext):
     user_id = update.message.chat_id
@@ -331,7 +269,8 @@ def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("studyplan", studyplan))
     app.add_handler(CommandHandler("explain", explain))
-    app.add_handler(CommandHandler("quiz", quiz))
+    #app.add_handler(CommandHandler("quiz", quiz))
+    #app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, check_answer))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     logging.info("🤖 Bot is running...")
     app.run_polling(poll_interval=3)
