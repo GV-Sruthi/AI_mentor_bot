@@ -2,6 +2,7 @@ import os
 import logging
 import re
 import random
+import urllib.parse
 import mysql.connector
 from together import Together
 from dotenv import load_dotenv
@@ -14,10 +15,7 @@ from telegram.ext import (
 load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
-DB_HOST = os.getenv("DB_HOST")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
+DB_URL = os.getenv("DB_URL")
 
 # Initialize Together AI client
 client = Together(api_key=TOGETHER_API_KEY)
@@ -27,11 +25,15 @@ logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
 def connect_db():
+    url = os.getenv("DB_URL")
+    parsed_url = urllib.parse.urlparse(url)
+
     return mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
+        host=parsed_url.hostname,
+        user=parsed_url.username,
+        password=parsed_url.password,
+        database=parsed_url.path.lstrip('/'),
+        port=parsed_url.port
     )
 
 def add_user(user_id, username):
