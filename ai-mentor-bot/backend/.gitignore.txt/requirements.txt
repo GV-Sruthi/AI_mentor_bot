@@ -1,0 +1,9 @@
+fastapi
+python-telegram-bot
+mysql-connector-python
+openai
+python-dotenv
+requests
+uvicorn
+pytz
+mysql-connector-python
