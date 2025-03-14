@@ -33,7 +33,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    scheduler = AsyncIOScheduler(timezone=pytz.utc)  # Or your desired timezone
+    scheduler = AsyncIOScheduler()
     scheduler.start()
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
