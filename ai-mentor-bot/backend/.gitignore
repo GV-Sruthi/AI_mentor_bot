@@ -20,5 +20,9 @@ venv/
 #Ignore environment variables
 .env
 
-# Allow test_connection.py in the backend folder
-!/backend/test_connection.py
+notdone/
+
+node_modules/
+
+package.json
+package-lock.json
