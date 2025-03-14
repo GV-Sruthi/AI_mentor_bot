@@ -1,46 +1,109 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import mysql.connector
 import os
-import requests
 import logging
-import pytz
-
+import random
 from dotenv import load_dotenv
+from telegram import Update, ForceReply
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import requests
 
+# Load environment variables
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Check if token is loaded
+if not TOKEN:
+    raise ValueError("❌ TELEGRAM_BOT_TOKEN not found. Make sure you have a .env file with the correct token.")
 
+# Logging setup
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+
+# API URL for FastAPI backend
 backend_url = "http://localhost:8000/process_message"
 
+# Send message to FastAPI backend for processing
 async def send_message_to_backend(message, chat_id):
     response = requests.post(backend_url, json={"message": message})
+    
     if response.status_code == 200:
-        return response.json().get("reply")
-    return f"Error: {response.status_code}"
+        reply = response.json().get("reply")
+    else:
+        reply = f"Error: {response.status_code}"
+    
+    return reply
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Command Handlers
+async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
-        "👋 Hello! I'm your AI Mentor Bot. How can I assist you today?"
+        "👋 Hello! I'm your AI Mentor Bot. Here are some commands you can use:\n"
+        "💡 /studyplan - Generate a personalized study plan.\n"
+        "📝 /explain <topic> - Get explanations on various topics.\n"
+        "🧠 /quiz - Test your knowledge with a quiz.\n"
+        "🤖 Just ask me anything else, and I'll try to help you!"
     )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def studyplan(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    user_message = "Create a study plan for a beginner learning Python programming."
+    
+    reply = await send_message_to_backend(user_message, user_id)
+    await update.message.reply_text(reply)
+
+async def explain(update: Update, context: CallbackContext) -> None:
+    if context.args:
+        topic = " ".join(context.args).lower()
+        message = f"Explain {topic}"
+        user_id = update.message.from_user.id
+        
+        reply = await send_message_to_backend(message, user_id)
+        await update.message.reply_text(reply)
+    else:
+        await update.message.reply_text("❌ Please provide a topic. Example: /explain Python")
+
+async def ask(update: Update, context: CallbackContext) -> None:
+    if not context.args:
+        await update.message.reply_text("❌ Please ask a question. Example: /ask What is AI?")
+        return
+
+    question = " ".join(context.args)
+    user_id = update.message.from_user.id
+
+    reply = await send_message_to_backend(question, user_id)
+    await update.message.reply_text(reply)
+
+async def quiz(update: Update, context: CallbackContext) -> None:
+    question = random.choice([
+        "What is the output of print(2 ** 3)?",
+        "Which keyword is used to define a function in Python?",
+        "What does len([1, 2, 3]) return?"
+    ])
+    await update.message.reply_text(f"🧠 Quiz Time! {question}")
+
+async def handle_message(update: Update, context: CallbackContext) -> None:
     user_message = update.message.text
-    chat_id = update.message.chat_id
-    reply = await send_message_to_backend(user_message, chat_id)
+    user_id = update.message.from_user.id
+
+    reply = await send_message_to_backend(user_message, user_id)
     await update.message.reply_text(reply)
 
 def main():
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    scheduler = AsyncIOScheduler()
-    scheduler.start()
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    # Register command handlers
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("studyplan", studyplan))
+    dp.add_handler(CommandHandler("explain", explain))
+    dp.add_handler(CommandHandler("quiz", quiz))
+    dp.add_handler(CommandHandler("ask", ask))
+
+    # Message handler for general queries (calls FastAPI backend)
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
     logging.info("🤖 Bot is running...")
-    application.run_polling()
+    updater.start_polling()
+    updater.idle()
 
-if __name__ == "__main__":
+
+if _name_ == "_main_":
     main()
