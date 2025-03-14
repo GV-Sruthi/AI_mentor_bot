@@ -16,7 +16,7 @@ Railway (Deployment & Database)
 Setup
 
 Clone the repository:
-git clone https://github.com/your-repo/ai-mentor-bot.git
+git clone https://github.com/GV-Sruthi/AI_mentor_bot/ai-mentor-bot.git
 cd ai-mentor-bot
 
 Install dependencies:
